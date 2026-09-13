@@ -1,1 +1,0 @@
-/home/klee/.nvm/versions/node/v24.14.0/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/prompts/implement.md
