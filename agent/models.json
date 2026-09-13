@@ -1,0 +1,29 @@
+{
+  "providers": {
+    "vLLM": {
+      "baseUrl": "http://vllm.maybelab.internal:8000/v1",
+      "api": "openai-completions",
+      "models": [
+        { 
+          "id": "Qwen3.8-27B",
+	  "name": "Qwen3.8 27B",
+	  "reasoning": true,
+	  "thinkingLevelMap": {
+            "minimal": null,
+            "low": "low",
+            "medium": "medium",
+            "high": null,
+            "xhigh": "xhigh",
+            "max": null
+          },
+	  "input": ["text", "image"],
+	  "contextWindow": 262144,
+	  "maxTokens": 65536,
+	  "samplingParams": {
+            "presence_penalty": 0.05
+          }
+	}
+      ]
+    }
+  }
+}

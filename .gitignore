@@ -1,0 +1,6 @@
+# Runtime state, caches, and credentials — not part of the customizations
+agent/auth.json
+agent/models-store.json
+agent/sessions/
+agent/npm/
+agent/web-search-cache/

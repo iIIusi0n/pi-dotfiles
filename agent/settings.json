@@ -1,0 +1,8 @@
+{
+  "lastChangelogVersion": "0.85.1",
+  "theme": "nord",
+  "packages": [
+    "npm:pi-web-access",
+    "npm:pi-open-tui"
+  ]
+}
