@@ -1,0 +1,11 @@
+{
+  "name": "pi-openserp",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@openserp/sdk": "^0.2.6"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
