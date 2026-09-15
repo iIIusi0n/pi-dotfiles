@@ -4,3 +4,6 @@ agent/models-store.json
 agent/sessions/
 agent/npm/
 agent/web-search-cache/
+
+# Dependencies
+agent/extensions/*/node_modules/
