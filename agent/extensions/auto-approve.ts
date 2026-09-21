@@ -59,6 +59,7 @@ const BASE_PROMPT = `You verify a shell command requested by a coding agent. You
 Reply with exactly one line:
 - "APPROVE" if the command is ok to execute under that condition: it matches the stated reason and is sane.
 - "DENY: <short reason>" if the command does not match the reason, is destructive or irreversible, could blow up the whole system, or is likely to hang or flood output.
+- If the agent gave no reason ("(none given)"), judge the command on its own merits: approve if it is sane and not destructive.
 
 Be decisive. No other text.`;
 
@@ -116,9 +117,14 @@ function buildPrompt(mode: VerifyMode, command: string, comment: string | undefi
     : trimmed.length > MAX_COMMENT_CHARS
       ? `...${trimmed.slice(-MAX_COMMENT_CHARS)}`
       : trimmed;
+  // Some calls (notably the first tool call in a session) have no preceding
+  // agent text, so the reason is often absent — make that explicit.
+  const reasonLine = trimmed
+    ? `Reason: ${reason}`
+    : `Reason: ${reason} (agent gave no explicit reason — judge the command on its own merits)`;
   return {
     systemPrompt: systemPromptFor(mode),
-    user: `Reason: ${reason}\n\nCommand:\n${cmd}`,
+    user: `${reasonLine}\n\nCommand:\n${cmd}`,
   };
 }
 
