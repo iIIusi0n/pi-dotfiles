@@ -15,7 +15,9 @@ import { extractComment, verifyCommand, withLoader } from "./auto-approve.ts";
  * Denials are fail-closed; verification errors/timeouts block the command.
  *
  * Status shows as "ro: on/off" in the footer status line (via the official
- * ctx.ui.setStatus API — the extension-status line under the model line).
+ * ctx.ui.setStatus API — the extension-status line under the model line), and
+ * a <read_only_mode> system-prompt section is injected while active so the
+ * model knows about the mode before its first blocked call.
  */
 
 export default function (pi: ExtensionAPI) {
@@ -34,6 +36,18 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     ro = false; // fresh state per session
     syncStatus(ctx); // show "ro: off" immediately, no /ro needed
+  });
+
+  // Keep the model informed of read-only mode in the system prompt, so it
+  // doesn't have to discover the mode from a blocked tool call on its first
+  // attempt. Pi diffs sections and only patches the prompt when this changes.
+  pi.on("before_agent_start", (event) => {
+    if (ro) {
+      event.systemPromptOptions.sections.read_only_mode =
+        "Read-only mode is active. The write and edit tools are blocked, and bash commands are LLM-verified to be non-mutating before they run. Prefer read-only commands (ls, cat, rg, grep, git status/log/diff, find, etc.). Do not attempt to create, modify, or delete files. If a write is required, tell the user to run /ro to disable read-only mode.";
+    } else {
+      delete event.systemPromptOptions.sections.read_only_mode;
+    }
   });
 
   pi.on("tool_call", async (event, ctx) => {
