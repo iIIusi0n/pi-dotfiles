@@ -1,12 +1,18 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { extractComment, verifyCommand, withLoader } from "./auto-approve.ts";
 
 /**
  * /ro — read-only mode for Pi (toggle).
  *
  * While active:
  *  - All write/edit tool calls are blocked.
- *  - All bash commands prompt for confirmation.
- *  - User !/!! bash commands are also gated.
+ *  - All bash commands are verified in READ-ONLY mode by the LLM auto-approve
+ *    verifier: the selected model checks that the command will not modify the
+ *    system (no writes, deletes, installs, git state changes, ...). The
+ *    agent's own message is passed to the verifier as the stated reason.
+ *  - User !/!! bash commands are verified the same way.
+ *
+ * Denials are fail-closed; verification errors/timeouts block the command.
  *
  * Status shows as "ro: on/off" in the footer status line (via the official
  * ctx.ui.setStatus API — the extension-status line under the model line).
@@ -38,42 +44,72 @@ export default function (pi: ExtensionAPI) {
       return { block: true, reason: WRITE_BLOCK_REASON };
     }
 
-    // 2) Gate every bash command with a confirmation prompt
+    // 2) Verify every bash command with the LLM auto-approve verifier in
+    //    read-only mode: it must check that the command will not modify the
+    //    system. The agent's preceding message ("comment") explains why the
+    //    command is needed and is included in the verification prompt.
     if (event.toolName === "bash") {
       const command = (event.input as { command?: string }).command ?? "";
+      const model = ctx.model;
 
-      if (!ctx.hasUI) {
-        // No way to ask — err on the side of safety
-        return { block: true, reason: `Read-only mode: cannot confirm command "${command}" (no UI).` };
+      if (!model) {
+        // No way to verify — err on the side of safety
+        return { block: true, reason: `Read-only mode: cannot verify command "${command}" (no model selected).` };
       }
 
-      const ok = await ctx.ui.confirm(
-        "Read-only mode: allow command?",
-        `Allow: "${command}"?`,
+      const verdict = await withLoader(
+        ctx,
+        `Read-only check via ${model.provider}/${model.id}…`,
+        (signal) =>
+          verifyCommand({
+            command,
+            comment: extractComment(ctx.sessionManager),
+            mode: "read-only",
+            model,
+            modelRegistry: ctx.modelRegistry,
+            signal,
+          }),
       );
-      if (!ok) {
-        return { block: true, reason: "Blocked by read-only mode (user declined)." };
+      if (!verdict) {
+        return { block: true, reason: "Read-only mode: verification cancelled." };
+      }
+      if (!verdict.approved) {
+        return { block: true, reason: `Read-only mode: ${verdict.reason}` };
       }
     }
   });
 
-  // 3) Also gate user-typed ! / !! bash commands
+  // 3) Also verify user-typed ! / !! bash commands in read-only mode
   pi.on("user_bash", async (event, ctx) => {
     if (!ro) return;
 
-    if (!ctx.hasUI) {
+    const model = ctx.model;
+    if (!model) {
       return {
-        result: { output: "Blocked by read-only mode (no UI to confirm).", exitCode: 1, cancelled: false, truncated: false },
+        result: { output: "Blocked by read-only mode (no model selected to verify with).", exitCode: 1, cancelled: false, truncated: false },
       };
     }
 
-    const ok = await ctx.ui.confirm(
-      "Read-only mode: allow command?",
-      `"${event.command}" may modify the system. Allow it?`,
+    const verdict = await withLoader(
+      ctx,
+      `Read-only check via ${model.provider}/${model.id}…`,
+      (signal) =>
+        verifyCommand({
+          command: event.command,
+          mode: "read-only",
+          model,
+          modelRegistry: ctx.modelRegistry,
+          signal,
+        }),
     );
-    if (!ok) {
+    if (!verdict || !verdict.approved) {
       return {
-        result: { output: "Cancelled by read-only mode.", exitCode: 1, cancelled: true, truncated: false },
+        result: {
+          output: `Blocked by read-only mode: ${verdict?.reason ?? "verification cancelled"}`,
+          exitCode: 1,
+          cancelled: verdict === null,
+          truncated: false,
+        },
       };
     }
   });
@@ -85,7 +121,7 @@ export default function (pi: ExtensionAPI) {
       syncStatus(ctx);
       ctx.ui.notify(
         ro
-          ? "Read-only mode ON: writes blocked, mutating shell commands require confirmation"
+          ? "Read-only mode ON: writes blocked, shell commands are LLM-verified to be read-only"
           : "Read-only mode off",
         ro ? "warning" : "info",
       );
