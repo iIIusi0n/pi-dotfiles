@@ -78,6 +78,13 @@ const MAX_COMMENT_CHARS = 1500;
 const VERIFIER_MAX_TOKENS = 48;
 
 /**
+ * Providers whose backend rejected `temperature` (e.g. "Unsupported
+ * parameter: temperature" on the ChatGPT/Codex backend). Detected once per
+ * session via a failed call + retry; subsequent calls omit the parameter.
+ */
+const temperatureUnsupported = new Set<string>();
+
+/**
  * Extra request body params for the verification call, to keep it fast.
  * Qwen3 models on vLLM think by default, which would eat the whole
  * maxTokens budget before the one-line verdict; disable thinking for those.
@@ -169,19 +176,29 @@ export async function verifyCommand(p: VerifyParams): Promise<Verdict> {
   p.signal?.addEventListener("abort", onOuterAbort, { once: true });
 
   try {
-    const res: AssistantMessage = await p.modelRegistry.complete(
-      p.model,
-      { systemPrompt, messages: [userMessage] },
-      {
+    // temperature: 0 keeps verdicts stable across repeated calls. Some
+    // backends (e.g. ChatGPT/Codex) reject the parameter entirely; that is
+    // detected once via a failed call + retry, then remembered.
+    const completeOnce = (omitTemperature: boolean) =>
+      p.modelRegistry.complete(p.model, { systemPrompt, messages: [userMessage] }, {
         signal: controller.signal,
         maxTokens: VERIFIER_MAX_TOKENS,
-        temperature: 0,
+        ...(omitTemperature || temperatureUnsupported.has(p.model.provider) ? {} : { temperature: 0 }),
         samplingParams: verificationSamplingParams(p.model),
-      },
-    );
+      });
+    let res: AssistantMessage = await completeOnce(false);
+    if (res.stopReason === "error" && /temperature/i.test(res.errorMessage ?? "") && !temperatureUnsupported.has(p.model.provider)) {
+      temperatureUnsupported.add(p.model.provider);
+      res = await completeOnce(true);
+    }
     if (res.stopReason === "aborted") {
       if (timedOut) return { approved: false, reason: `verification timed out after ${timeoutMs}ms` };
       return { approved: false, reason: "verification cancelled" };
+    }
+    // complete() resolves — rather than throwing — on provider errors;
+    // surface the real message instead of reporting "no text".
+    if (res.stopReason === "error") {
+      return { approved: false, reason: `verification failed: ${(res.errorMessage ?? "unknown provider error").slice(0, 160)}` };
     }
     const text = res.content
       .filter((c): c is { type: "text"; text: string } => c.type === "text")
