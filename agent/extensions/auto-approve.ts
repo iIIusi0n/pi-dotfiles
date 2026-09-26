@@ -5,7 +5,8 @@
  * selected LLM with a minimal prompt before it runs:
  *   - the command itself, and
  *   - the agent's own message explaining why it is needed (the "comment" —
- *     the assistant message that immediately precedes the tool call).
+ *     the assistant message that immediately precedes the tool call; falls back
+ *     to its thinking text when the model shows no visible text).
  *
  * The verifier answers with exactly one line:
  *   APPROVE
@@ -76,6 +77,13 @@ const MAX_COMMAND_CHARS = 4000;
 const MAX_COMMENT_CHARS = 1500;
 /** "DENY: <short reason>" fits comfortably in this budget. */
 const VERIFIER_MAX_TOKENS = 48;
+/** Reasoning models burn part of the budget on their reasoning output, so the
+ * one-line verdict needs a larger ceiling to still fit. */
+const REASONING_VERIFIER_MAX_TOKENS = 1024;
+
+function verificationMaxTokens(model: Model<any>): number {
+  return model.reasoning ? REASONING_VERIFIER_MAX_TOKENS : VERIFIER_MAX_TOKENS;
+}
 
 /**
  * Providers whose backend rejected `temperature` (e.g. "Unsupported
@@ -182,7 +190,7 @@ export async function verifyCommand(p: VerifyParams): Promise<Verdict> {
     const completeOnce = (omitTemperature: boolean) =>
       p.modelRegistry.complete(p.model, { systemPrompt, messages: [userMessage] }, {
         signal: controller.signal,
-        maxTokens: VERIFIER_MAX_TOKENS,
+        maxTokens: verificationMaxTokens(p.model),
         ...(omitTemperature || temperatureUnsupported.has(p.model.provider) ? {} : { temperature: 0 }),
         samplingParams: verificationSamplingParams(p.model),
       });
@@ -205,7 +213,18 @@ export async function verifyCommand(p: VerifyParams): Promise<Verdict> {
       .map((c) => c.text)
       .join("\n")
       .trim();
-    if (!text) return { approved: false, reason: "verifier returned no text" };
+    if (!text) {
+      // A reasoning verifier can use the whole budget on thinking and leave the
+      // verdict in the thinking block. Take it from there before failing closed.
+      const thinking = res.content
+        .filter((c): c is { type: "thinking"; thinking: string } => c.type === "thinking")
+        .map((c) => c.thinking ?? "")
+        .join("\n");
+      const lines = thinking.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+      const verdictLine = [...lines].reverse().find((l) => /^(APPROVE|DENY)\b/i.test(l));
+      if (verdictLine) return parseVerdict(verdictLine);
+      return { approved: false, reason: "verifier returned no text" };
+    }
     return parseVerdict(text);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -268,13 +287,24 @@ export function extractComment(sessionManager: ExtensionContext["sessionManager"
     const msg = entry.message;
     if (!msg || msg.role !== "assistant") continue;
     if (!Array.isArray(msg.content)) continue;
-    const text = msg.content
-      .filter((c): c is { type: string; text?: string } => Boolean(c && typeof c === "object"))
+    const blocks = msg.content.filter(
+      (c): c is { type: string; text?: string; thinking?: string } => Boolean(c && typeof c === "object"),
+    );
+    const text = blocks
       .filter((c) => c.type === "text")
       .map((c) => c.text ?? "")
       .join("\n")
       .trim();
-    return text || undefined;
+    if (text) return text;
+    // Reasoning models (gpt-5.x/6.x on the Codex backend, Qwen on vLLM, ...) keep
+    // the rationale in thinking blocks and emit no visible text before a tool
+    // call. Use that as the stated reason instead of "(none given)".
+    const thinking = blocks
+      .filter((c) => c.type === "thinking")
+      .map((c) => c.thinking ?? "")
+      .join("\n")
+      .trim();
+    return thinking || undefined;
   }
   return undefined;
 }
