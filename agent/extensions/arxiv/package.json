@@ -1,16 +1,13 @@
 {
-  "name": "pi-openserp",
+  "name": "arxiv",
   "version": "1.0.0",
   "private": true,
-  "description": "Web search through the OpenSERP SDK",
+  "description": "arXiv search and paper lookup tools for Pi",
   "type": "module",
   "keywords": ["pi-package"],
   "files": ["index.ts", "README.md"],
   "pi": {
     "extensions": ["./index.ts"]
-  },
-  "dependencies": {
-    "@openserp/sdk": "^0.2.6"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

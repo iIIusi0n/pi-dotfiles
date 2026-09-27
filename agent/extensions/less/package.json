@@ -1,19 +1,16 @@
 {
-  "name": "pi-openserp",
+  "name": "less",
   "version": "1.0.0",
   "private": true,
-  "description": "Web search through the OpenSERP SDK",
+  "description": "/less read-only pager for the current Pi session transcript",
   "type": "module",
   "keywords": ["pi-package"],
   "files": ["index.ts", "README.md"],
   "pi": {
     "extensions": ["./index.ts"]
   },
-  "dependencies": {
-    "@openserp/sdk": "^0.2.6"
-  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
+    "@earendil-works/pi-tui": "*"
   }
 }

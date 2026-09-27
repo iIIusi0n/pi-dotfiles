@@ -2,6 +2,13 @@
   "lastChangelogVersion": "0.87.1",
   "theme": "nord",
   "packages": [
-    "npm:pi-open-tui"
+    "npm:pi-open-tui",
+    "./extensions/arxiv",
+    "./extensions/auto-approve",
+    "./extensions/less",
+    "./extensions/openserp",
+    "./extensions/question",
+    "./extensions/ro-mode",
+    "./extensions/subagent"
   ]
 }

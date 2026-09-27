@@ -1,19 +1,19 @@
 {
-  "name": "pi-openserp",
+  "name": "ro-mode",
   "version": "1.0.0",
   "private": true,
-  "description": "Web search through the OpenSERP SDK",
+  "description": "/ro read-only mode: blocks writes and LLM-verifies shell commands",
   "type": "module",
   "keywords": ["pi-package"],
   "files": ["index.ts", "README.md"],
   "pi": {
     "extensions": ["./index.ts"]
   },
-  "dependencies": {
-    "@openserp/sdk": "^0.2.6"
+  "devDependencies": {
+    "auto-approve": "file:../auto-approve"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
+    "auto-approve": "*"
   }
 }

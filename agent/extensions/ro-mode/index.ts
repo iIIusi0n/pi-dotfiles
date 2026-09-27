@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { extractComment, verifyCommand, withLoader } from "./auto-approve.ts";
+import { extractComment, verifyCommand, withLoader } from "auto-approve";
 
 /**
  * /ro — read-only mode for Pi (toggle).

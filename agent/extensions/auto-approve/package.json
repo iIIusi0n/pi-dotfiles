@@ -1,0 +1,21 @@
+{
+  "name": "auto-approve",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LLM-verified approval for bash commands, with an importable verifier",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "files": ["index.ts", "README.md"],
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
